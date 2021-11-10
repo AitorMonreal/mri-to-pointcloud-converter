@@ -13,9 +13,56 @@ import argparse
 
 # VTK
 import vtk
+import vtkplotter
 
 # OS
 import os
+
+# SYS
+import sys
+
+
+class FemurSurface(object):
+    def __init__(self, data_dir: str, femur_id: str):
+        self.femur_id = femur_id
+        self.femur_surface = self.read_mhd_file(data_dir)
+
+    def read_mhd_file(self, data_dir: str):
+        mhd_file_path: str = data_dir + "/" + self.femur_id
+        reader = vtk.vtkMetaImageReader()
+        reader.SetFileName(mhd_file_path)
+        reader.Update()
+        return reader
+
+    def generate_smoothed_surface(self):
+        self.generate_marching_cubes()
+        self.smooth_surface()
+
+    def generate_marching_cubes(self):
+        marching_cubes = vtk.vtkMarchingCubes()
+        marching_cubes.SetInputConnection(self.femur_surface.GetOutputPort())
+        marching_cubes.GenerateValues(1, 1, 1)
+        marching_cubes.Update()
+        self.femur_surface = marching_cubes
+
+    def generate_discrete_marching_cubes(self):
+        discrete_marching_cubes = vtk.vtkDiscreteMarchingCubes()
+        discrete_marching_cubes.SetInputConnection(self.femur_surface.GetOutputPort())
+        discrete_marching_cubes.GenerateValues(1, 1, 1)
+        discrete_marching_cubes.Update()
+        self.femur_surface = discrete_marching_cubes
+
+    def smooth_surface(self):
+        smoother = vtk.vtkWindowedSincPolyDataFilter()
+        smoother.SetInput(self.femur_surface.GetOutput())
+        smoother.BoundarySmoothingOn()
+        smoother.SetNumberOfIterations(40)
+        smoother.Update()
+        self.femur_surface = smoother.GetOutput()
+
+    def visualise_surface(self):
+        # create the outline of the data as polygonal mesh and show it
+        vtkplotter.Mesh(self.femur_surface).c('viridis').alpha(1.0).show()
 
 
 def __parse_arguments() -> argparse.Namespace:
@@ -28,6 +75,8 @@ def __parse_arguments() -> argparse.Namespace:
 
     parser.add_argument("--segmented_data_dir", type=str, default='~/.config',
                         help="Directory where you are storing the 3D MRI segmented data as mhd (and raw) files.")
+    parser.add_argument("--visualise", type=bool, default='False', help="Do you want to visualise the surfaces, "
+                                                                             "True or False?")
 
     argcomplete.autocomplete(parser)
 
@@ -36,19 +85,17 @@ def __parse_arguments() -> argparse.Namespace:
 
 def load_data(data_dir: str):
     load_femur_bone(data_dir)
-    load_tibia_bone()
-    load_femur_cartilage()
-    load_tibia_cartilage()
+    # load_tibia_bone()
+    # load_femur_cartilage()
+    # load_tibia_cartilage()
 
 
 def load_femur_bone(data_dir: str):
     for filename in os.listdir(data_dir):
         if filename.endswith(".mhd"):
-            file_id: int = filename[0:7]
-            mhd_file_path: str = data_dir + "/" + filename
-            reader = vtk.vtkMetaImageReader()
-            reader.SetFileName(mhd_file_path)
-            reader.Update()
+            femur_surface = FemurSurface(data_dir, filename)
+
+            reader = read_mhd_file(filename, data_dir)
 
             # Discrete Marching Cubes
             dmc = vtk.vtkDiscreteMarchingCubes()
@@ -56,95 +103,44 @@ def load_femur_bone(data_dir: str):
             dmc.GenerateValues(1, 1, 1)
             dmc.Update()
 
-            # Marching Cubes
-            marching_cubes = vtk.vtkMarchingCubes()
-            marching_cubes.SetInputConnection(reader.GetOutputPort())
-            marching_cubes.GenerateValues(1, 1, 1)
-            marching_cubes.Update()
+            marching_cubes_surface = perform_marching_cubes(reader)
 
-            smoothed_surface = smooth_surface(marching_cubes)
+            smoothed_surface = smooth_surface(marching_cubes_surface)
+            discrete_smoothed_surface = smooth_surface(dmc)
 
-
-    import vtkplotter
-    import openmesh as om
-
-    rough_stls = 'C:/Users/monre/OneDrive - Imperial College London/ME4/FYP/DATA/OAI-ZIB/processed_data/00.rough_stls'
-    smooth_stls = 'C:/Users/monre/OneDrive - Imperial College London/ME4/FYP/DATA/OAI-ZIB/processed_data/01.smooth_stls'
-    point_clouds = 'C:/Users/monre/OneDrive - Imperial College London/ME4/FYP/DATA/OAI-ZIB/processed_data/02.point_clouds'
-
-    directory = 'C:/Users/monre/OneDrive - Imperial College London/ME4/FYP/DATA/OAI-ZIB/segmentation_masks'
-    amount = 3  # 2-only femur bone; 3-femur bone & femur cartilage, ...
-    # TODO
-    for filename in os.listdir(directory):
-        for i in range(1, amount):
-            if i == 1:
-                name = "femur_bone_"
-            elif i == 2:
-                name = "femur_cart_"
-            elif i == 3:
-                name = "tibia_bone_"
-            else:
-                name = "tibia_cart_"
-            if filename.endswith(".mhd"):
-                ID = filename[0:7]
-                mhd_path = directory + "/" + filename
-                reader = vtk.vtkMetaImageReader()
-                reader.SetFileName(mhd_path)
-                reader.Update()
-
-                # Marching Cubes
-                dmc = vtk.vtkDiscreteMarchingCubes()
-                dmc.SetInputConnection(reader.GetOutputPort())
-                # GenerateValues(int numContours, double rangeStart, double rangeEnd)
-                dmc.GenerateValues(1, i, i)  # To get the femur bone
-                # dmc.GenerateValues(1, 1, 1) # To get the femur bone
-                # dmc.GenerateValues(1, 2, 2) # To get the femur cartilage
-                # dmc.GenerateValues(1, 3, 3) # To get the tibia bone
-                # dmc.GenerateValues(1, 4, 4) # To get the tibia cartilage
-                # dmc.GenerateValues(4, 1, 4) # To get the full assembly
-                dmc.Update()
-
-                # Create the stl file
-                os.chdir(rough_stls)  # Set directory
-                writer = vtk.vtkSTLWriter()
-                writer.SetInputConnection(dmc.GetOutputPort())
-                writer.SetFileTypeToBinary()
-                writer.SetFileName(name + ID + ".stl")
-                writer.Write()
-
-                # Load a mesh and show it
-                a0 = vtkplotter.Plotter().load(name + ID + ".stl", threshold=True, c="v")
-                # vp.show(a0, at=5)
-
-                # Adjust mesh using Laplacian smoothing
-                a0_lap = a0.smoothLaplacian(niter=50, relaxfact=0.1, edgeAngle=60, featureAngle=150).color(
-                    "seagreen").alpha(1).legend("window sinc")
-                # Adjust mesh using a windowed sinc function interpolation kernel
-                a0_smooth = a0_lap.clone().smoothWSinc(niter=50, passBand=0.1, edgeAngle=15, featureAngle=90).color(
-                    "crimson").alpha(1).legend("femur bone")
-                os.chdir(smooth_stls)
-                # Save smoothened mesh
-                vtkplotter.save(a0_smooth, name + "smooth_" + ID + ".stl", binary=True)
-
-                # Convert mesh to point cloud
-                mesh = om.read_trimesh(name + "smooth_" + ID + ".stl")
-                os.chdir(point_clouds)
-                om.write_mesh(name + "cloud_" + ID + ".ply", mesh)
-
-    '''
-    import open3d as o3d
-    pcd = o3d.io.read_point_cloud("femur_bone_cloud_9001104.ply")
-    o3d.visualization.draw_geometries([pcd])
-    '''
+            visualise_surface(discrete_smoothed_surface)
 
 
-def smooth_surface(marching_cubes) -> vtk.vtkWindowedSincPolyDataFilter:
+def read_mhd_file(filename: str, data_dir: str):
+    file_id: str = filename[0:7]
+    mhd_file_path: str = data_dir + "/" + filename
+    reader = vtk.vtkMetaImageReader()
+    reader.SetFileName(mhd_file_path)
+    reader.Update()
+    return reader
+
+
+def perform_marching_cubes(reader):
+    marching_cubes = vtk.vtkMarchingCubes()
+    marching_cubes.SetInputConnection(reader.GetOutputPort())
+    marching_cubes.GenerateValues(1, 1, 1)
+    marching_cubes.Update()
+    return marching_cubes
+
+
+def smooth_surface(surface) -> vtk.vtkWindowedSincPolyDataFilter:
     smoother = vtk.vtkWindowedSincPolyDataFilter()
-    smoother.SetInput(marching_cubes.GetOutput())
+    smoother.SetInput(surface.GetOutput())
     smoother.BoundarySmoothingOn()
     smoother.SetNumberOfIterations(40)
     smoother.Update()
     return smoother.GetOutput()
+
+
+def visualise_surface(surface):
+    # create the outline of the data as polygonal mesh and show it
+    vtkplotter.Mesh(surface).c('viridis').alpha(1.0).show()
+
 
 def main(argv):
     """Main function"""
@@ -153,5 +149,17 @@ def main(argv):
 
     args = __parse_arguments()
     data_dir: str = args.segmented_data_dir
+    visualise: bool = args.visualise
 
-    load_data(data_dir)
+    data_dir = ""
+    for filename in os.listdir(data_dir):
+        if filename.endswith(".mhd"):
+            break;
+    femur_id = filename[0:7]
+    femur_surface = FemurSurface(data_dir, femur_id)
+    femur_surface.generate_smoothed_surface()
+    femur_surface.visualise_surface()
+
+
+if __name__ == "__main__":
+    main(sys.argv)
