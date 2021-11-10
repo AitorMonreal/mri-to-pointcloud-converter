@@ -90,56 +90,17 @@ def load_data(data_dir: str):
     # load_tibia_cartilage()
 
 
-def load_femur_bone(data_dir: str):
+def load_femur_bone(data_dir: str, visualise: bool):
+    count: int = 0
     for filename in os.listdir(data_dir):
-        if filename.endswith(".mhd"):
-            femur_surface = FemurSurface(data_dir, filename)
+        if filename.endswith(".mhd") and count < 1:
+            count += 1
+            femur_id: str = filename[0:7]
 
-            reader = read_mhd_file(filename, data_dir)
-
-            # Discrete Marching Cubes
-            dmc = vtk.vtkDiscreteMarchingCubes()
-            dmc.SetInputConnection(reader.GetOutputPort())
-            dmc.GenerateValues(1, 1, 1)
-            dmc.Update()
-
-            marching_cubes_surface = perform_marching_cubes(reader)
-
-            smoothed_surface = smooth_surface(marching_cubes_surface)
-            discrete_smoothed_surface = smooth_surface(dmc)
-
-            visualise_surface(discrete_smoothed_surface)
-
-
-def read_mhd_file(filename: str, data_dir: str):
-    file_id: str = filename[0:7]
-    mhd_file_path: str = data_dir + "/" + filename
-    reader = vtk.vtkMetaImageReader()
-    reader.SetFileName(mhd_file_path)
-    reader.Update()
-    return reader
-
-
-def perform_marching_cubes(reader):
-    marching_cubes = vtk.vtkMarchingCubes()
-    marching_cubes.SetInputConnection(reader.GetOutputPort())
-    marching_cubes.GenerateValues(1, 1, 1)
-    marching_cubes.Update()
-    return marching_cubes
-
-
-def smooth_surface(surface) -> vtk.vtkWindowedSincPolyDataFilter:
-    smoother = vtk.vtkWindowedSincPolyDataFilter()
-    smoother.SetInput(surface.GetOutput())
-    smoother.BoundarySmoothingOn()
-    smoother.SetNumberOfIterations(40)
-    smoother.Update()
-    return smoother.GetOutput()
-
-
-def visualise_surface(surface):
-    # create the outline of the data as polygonal mesh and show it
-    vtkplotter.Mesh(surface).c('viridis').alpha(1.0).show()
+            femur_surface = FemurSurface(data_dir, femur_id)
+            femur_surface.generate_smoothed_surface()
+            if visualise:
+                femur_surface.visualise_surface()
 
 
 def main(argv):
@@ -152,13 +113,9 @@ def main(argv):
     visualise: bool = args.visualise
 
     data_dir = ""
-    for filename in os.listdir(data_dir):
-        if filename.endswith(".mhd"):
-            break;
-    femur_id = filename[0:7]
-    femur_surface = FemurSurface(data_dir, femur_id)
-    femur_surface.generate_smoothed_surface()
-    femur_surface.visualise_surface()
+    visualise = True
+
+    load_femur_bone(data_dir, visualise)
 
 
 if __name__ == "__main__":
