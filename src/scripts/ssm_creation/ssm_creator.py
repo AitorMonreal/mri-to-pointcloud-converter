@@ -13,7 +13,7 @@ import argparse
 
 # VTK
 import vtk
-import vtkplotter
+from vedo import *
 
 # OS
 import os
@@ -23,19 +23,22 @@ import sys
 
 
 class FemurSurface(object):
-    def __init__(self, data_dir: str, femur_id: str):
-        self.femur_id = femur_id
+    def __init__(self, data_dir: str, filename: str):
+        self.filename = filename
         self.femur_surface = self.read_mhd_file(data_dir)
+        self.smoothing_iterations = 14
+        self.pass_band = 0.001
+        self.feature_angle = 120.0
 
     def read_mhd_file(self, data_dir: str):
-        mhd_file_path: str = data_dir + "/" + self.femur_id
+        mhd_file_path: str = data_dir + "/" + self.filename
         reader = vtk.vtkMetaImageReader()
         reader.SetFileName(mhd_file_path)
         reader.Update()
         return reader
 
     def generate_smoothed_surface(self):
-        self.generate_marching_cubes()
+        self.generate_discrete_marching_cubes()
         self.smooth_surface()
 
     def generate_marching_cubes(self):
@@ -54,16 +57,20 @@ class FemurSurface(object):
 
     def smooth_surface(self):
         smoother = vtk.vtkWindowedSincPolyDataFilter()
-        smoother.SetInput(self.femur_surface.GetOutput())
-        smoother.BoundarySmoothingOn()
-        smoother.SetNumberOfIterations(40)
+        smoother.SetInputConnection(self.femur_surface.GetOutputPort())
+        smoother.SetNumberOfIterations(self.smoothing_iterations)
+        smoother.SetFeatureAngle(self.feature_angle)
+        smoother.SetPassBand(self.pass_band)
+        smoother.BoundarySmoothingOff()
+        smoother.FeatureEdgeSmoothingOff()
+        smoother.NonManifoldSmoothingOn()
+        smoother.NormalizeCoordinatesOn()
         smoother.Update()
         self.femur_surface = smoother.GetOutput()
 
     def visualise_surface(self):
         # create the outline of the data as polygonal mesh and show it
-        vtkplotter.Mesh(self.femur_surface).c('viridis').alpha(1.0).show()
-
+        Mesh(self.femur_surface).show()
 
 def __parse_arguments() -> argparse.Namespace:
     """Parse the incoming command line parameters
@@ -97,7 +104,7 @@ def load_femur_bone(data_dir: str, visualise: bool):
             count += 1
             femur_id: str = filename[0:7]
 
-            femur_surface = FemurSurface(data_dir, femur_id)
+            femur_surface = FemurSurface(data_dir, filename)
             femur_surface.generate_smoothed_surface()
             if visualise:
                 femur_surface.visualise_surface()
@@ -112,7 +119,7 @@ def main(argv):
     data_dir: str = args.segmented_data_dir
     visualise: bool = args.visualise
 
-    data_dir = ""
+    data_dir = "/home/aitor/src/FemurPrediction/OAI-Data"
     visualise = True
 
     load_femur_bone(data_dir, visualise)
