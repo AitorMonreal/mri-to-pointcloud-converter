@@ -3,20 +3,6 @@
 # https://gist.github.com/jacks0n/cc0386e71d30c66a670e
 
 #######################################
-# E2A Custom                          #
-#######################################
-# CLion
-cmake-build-*/
-
-# ROS
-*.bag
-
-# Build and Release
-
-Build/
-Release/
-
-#######################################
 # Operating Systems                   #
 #######################################
 
