@@ -24,11 +24,11 @@ import sys
 
 class FemurSurface(object):
     def __init__(self, data_dir: str, filename: str):
-        self.filename = filename
+        self.filename: str = filename
         self.femur_surface = self.read_mhd_file(data_dir)
-        self.smoothing_iterations = 14
-        self.pass_band = 0.001
-        self.feature_angle = 120.0
+        self.smoothing_iterations: int = 14
+        self.pass_band: float = 0.001
+        self.feature_angle: float = 120.0
 
     def read_mhd_file(self, data_dir: str):
         mhd_file_path: str = data_dir + "/" + self.filename
@@ -70,7 +70,10 @@ class FemurSurface(object):
 
     def visualise_surface(self):
         # create the outline of the data as polygonal mesh and show it
-        Mesh(self.femur_surface).show()
+        cam = dict(pos=(100, 250, 80),
+                   viewup=(-0.8, -0.8, -0.8))
+        Mesh(self.femur_surface).show(camera=cam)
+
 
 def __parse_arguments() -> argparse.Namespace:
     """Parse the incoming command line parameters
@@ -83,7 +86,7 @@ def __parse_arguments() -> argparse.Namespace:
     parser.add_argument("--segmented_data_dir", type=str, default='~/.config',
                         help="Directory where you are storing the 3D MRI segmented data as mhd (and raw) files.")
     parser.add_argument("--visualise", type=bool, default='False', help="Do you want to visualise the surfaces, "
-                                                                             "True or False?")
+                                                                        "True or False?")
 
     argcomplete.autocomplete(parser)
 
