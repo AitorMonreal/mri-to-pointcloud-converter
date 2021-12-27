@@ -160,7 +160,7 @@ def main(argv):
     for filename in os.listdir(data_dir):
         if filename.endswith(".mhd") and count < 6:
             count += 1
-            surface = create_surface(data_dir, gitfilename, visualise, downsampling_ratio, marching_cubes_index)
+            surface = create_surface(data_dir, filename, visualise, downsampling_ratio, marching_cubes_index)
             save_pointcloud(surface, anatomical_part, filename, pointcloud_dir)
 
 
