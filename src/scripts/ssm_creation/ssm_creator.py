@@ -11,7 +11,7 @@ Created on Mon Nov 18 21:24:22 2019
 import argcomplete
 import argparse
 
-# VTK
+# VTK & Vedo
 import vtk
 from vedo import *
 
@@ -25,12 +25,14 @@ import sys
 class FemurSurface(object):
     def __init__(self, data_dir: str, filename: str):
         self.filename: str = filename
-        self.femur_surface = self.read_mhd_file(data_dir)
+        self.femur_vtk_surface = self.__read_mhd_file(data_dir)
         self.smoothing_iterations: int = 14
         self.pass_band: float = 0.001
         self.feature_angle: float = 120.0
+        self.femur_mesh = None
+        self.downsampling_ratio = 0.2
 
-    def read_mhd_file(self, data_dir: str):
+    def __read_mhd_file(self, data_dir: str):
         mhd_file_path: str = data_dir + "/" + self.filename
         reader = vtk.vtkMetaImageReader()
         reader.SetFileName(mhd_file_path)
@@ -38,26 +40,19 @@ class FemurSurface(object):
         return reader
 
     def generate_smoothed_surface(self):
-        self.generate_discrete_marching_cubes()
-        self.smooth_surface()
+        self.__generate_marching_cubes()
+        self.__smooth_surface()
 
-    def generate_marching_cubes(self):
-        marching_cubes = vtk.vtkMarchingCubes()
-        marching_cubes.SetInputConnection(self.femur_surface.GetOutputPort())
+    def __generate_marching_cubes(self):
+        marching_cubes = vtk.vtkDiscreteMarchingCubes()
+        marching_cubes.SetInputConnection(self.femur_vtk_surface.GetOutputPort())
         marching_cubes.GenerateValues(1, 1, 1)
         marching_cubes.Update()
-        self.femur_surface = marching_cubes
+        self.femur_vtk_surface = marching_cubes
 
-    def generate_discrete_marching_cubes(self):
-        discrete_marching_cubes = vtk.vtkDiscreteMarchingCubes()
-        discrete_marching_cubes.SetInputConnection(self.femur_surface.GetOutputPort())
-        discrete_marching_cubes.GenerateValues(1, 1, 1)
-        discrete_marching_cubes.Update()
-        self.femur_surface = discrete_marching_cubes
-
-    def smooth_surface(self):
+    def __smooth_surface(self):
         smoother = vtk.vtkWindowedSincPolyDataFilter()
-        smoother.SetInputConnection(self.femur_surface.GetOutputPort())
+        smoother.SetInputConnection(self.femur_vtk_surface.GetOutputPort())
         smoother.SetNumberOfIterations(self.smoothing_iterations)
         smoother.SetFeatureAngle(self.feature_angle)
         smoother.SetPassBand(self.pass_band)
@@ -66,13 +61,23 @@ class FemurSurface(object):
         smoother.NonManifoldSmoothingOn()
         smoother.NormalizeCoordinatesOn()
         smoother.Update()
-        self.femur_surface = smoother.GetOutput()
+        self.femur_vtk_surface = smoother.GetOutput()
+
+    def downsample_vertices(self):
+        self.femur_mesh = Mesh(self.femur_vtk_surface)
+        self.femur_mesh.decimate(fraction=self.downsampling_ratio)
 
     def visualise_surface(self):
         # create the outline of the data as polygonal mesh and show it
-        cam = dict(pos=(100, 250, 80),
-                   viewup=(-0.8, -0.8, -0.8))
-        Mesh(self.femur_surface).show(camera=cam)
+        cam = dict(pos=(100, 200, 20),
+                   viewup=(-0.8, -1.2, -1.8))
+        if self.femur_mesh is None:
+            Mesh(self.femur_vtk_surface).show(camera=cam)
+        else:
+            self.femur_mesh.show(camera=cam)
+
+    def get_surface(self):
+        return self.femur_mesh
 
 
 def __parse_arguments() -> argparse.Namespace:
@@ -102,6 +107,9 @@ def load_data(data_dir: str):
 
 def load_femur_bone(data_dir: str, visualise: bool):
     count: int = 0
+    vertices_nums: int = []
+    femur_surfaces = []
+
     for filename in os.listdir(data_dir):
         if filename.endswith(".mhd") and count < 1:
             count += 1
@@ -109,8 +117,21 @@ def load_femur_bone(data_dir: str, visualise: bool):
 
             femur_surface = FemurSurface(data_dir, filename)
             femur_surface.generate_smoothed_surface()
-            if visualise:
+            femur_surface.downsample_vertices()
+            if count == 0 and visualise:
                 femur_surface.visualise_surface()
+            femur_surfaces.append(femur_surface)
+            point_number = femur_surface.get_surface().points().shape[0]
+            vertices_nums.append(point_number)
+            pts0 = Points(femur_surface.get_surface().points())
+            reco = recoSurface(pts0, dims=100, radius=5, holeFilling=1)
+            cam = dict(pos=(100, 200, 20),
+                       viewup=(-0.8, -1.2, -1.8))
+            reco.show(camera=cam)
+    min_vertices_num = min(vertices_nums)
+    min_vertices_index = vertices_nums.index(min_vertices_num)
+
+
 
 
 def main(argv):
