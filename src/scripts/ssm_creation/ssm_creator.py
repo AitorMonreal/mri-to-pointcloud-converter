@@ -105,33 +105,29 @@ def load_data(data_dir: str):
     # load_tibia_cartilage()
 
 
-def load_femur_bone(data_dir: str, visualise: bool):
+def load_femur_bone(data_dir: str, visualise: bool, pointcloud_dir: str):
     count: int = 0
-    vertices_nums: int = []
-    femur_surfaces = []
+    file_header: str = "femur_bone_"
 
     for filename in os.listdir(data_dir):
-        if filename.endswith(".mhd") and count < 1:
+        if filename.endswith(".mhd") and count < 20:
             count += 1
             femur_id: str = filename[0:7]
 
             femur_surface = FemurSurface(data_dir, filename)
             femur_surface.generate_smoothed_surface()
             femur_surface.downsample_vertices()
-            if count == 0 and visualise:
+            if count == 1 and visualise:
                 femur_surface.visualise_surface()
-            femur_surfaces.append(femur_surface)
-            point_number = femur_surface.get_surface().points().shape[0]
-            vertices_nums.append(point_number)
-            pts0 = Points(femur_surface.get_surface().points())
-            reco = recoSurface(pts0, dims=100, radius=5, holeFilling=1)
-            cam = dict(pos=(100, 200, 20),
-                       viewup=(-0.8, -1.2, -1.8))
-            reco.show(camera=cam)
-    min_vertices_num = min(vertices_nums)
-    min_vertices_index = vertices_nums.index(min_vertices_num)
 
+            # NUMPY ARRAY
+            points = femur_surface.get_surface().points()
 
+            # VTK Follower - Vedo Points
+            vedo_points = Points(femur_surface.get_surface().points())
+            
+            os.chdir(pointcloud_dir)
+            io.write(Points(femur_surface.get_surface().points()), file_header + "cloud_" + femur_id + ".ply")
 
 
 def main(argv):
@@ -144,9 +140,10 @@ def main(argv):
     visualise: bool = args.visualise
 
     data_dir = "/home/aitor/src/FemurPrediction/OAI-Data"
-    visualise = True
+    pointcloud_dir = "/home/aitor/src/FemurPrediction/SmoothPointclouds"
+    visualise = False
 
-    load_femur_bone(data_dir, visualise)
+    load_femur_bone(data_dir, visualise, pointcloud_dir)
 
 
 if __name__ == "__main__":
