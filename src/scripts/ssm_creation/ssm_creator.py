@@ -118,25 +118,23 @@ def __parse_arguments() -> argparse.Namespace:
     return args
 
 
-def create_pointcloud(anatomical_part: str, data_dir: str, visualise: bool, pointcloud_dir: str, downsampling_ratio: float):
-    count: int = 0
-    anatomical_part_options = ["femur_bone", "femur_cartilage", "tibia_bone", "tibia_cartilage"]
-    marching_cubes_index = anatomical_part_options.index(anatomical_part) + 1
+def create_surface(data_dir: str, filename: str, visualise: bool, downsampling_ratio: float, marching_cubes_index: int):
+    surface = Surface(data_dir, filename, downsampling_ratio, marching_cubes_index)
+    surface.generate_smoothed_surface()
+    surface.downsample_vertices()
+    if visualise:
+        surface.visualise_surface()
 
-    for filename in os.listdir(data_dir):
-        if filename.endswith(".mhd") and count < 2:
-            count += 1
-            file_id: str = filename[0:7]
+    return surface
 
-            surface = Surface(data_dir, filename, downsampling_ratio, marching_cubes_index)
-            surface.generate_smoothed_surface()
-            surface.downsample_vertices()
-            if count == 1 and visualise:
-                surface.visualise_surface()
 
-            pointcloud = surface.get_surface().points()
-            os.chdir(pointcloud_dir)
-            pointcloud.tofile(anatomical_part + "_cloud_" + file_id)
+def save_pointcloud(surface, anatomical_part: str, filename: str, pointcloud_dir: str):
+    file_id: str = filename[0:7]
+
+    pointcloud = surface.get_surface().points()
+    os.chdir(pointcloud_dir)
+    complete_filename = os.path.join(pointcloud_dir, anatomical_part + "_cloud_" + file_id)
+    pointcloud.tofile(complete_filename)
 
 
 def main(argv):
@@ -157,7 +155,14 @@ def main(argv):
     # visualise = True
     # downsampling_ratio = 0.25
 
-    create_pointcloud(anatomical_part, data_dir, visualise, pointcloud_dir, downsampling_ratio)
+    count: int = 0
+    anatomical_part_options = ["femur_bone", "femur_cartilage", "tibia_bone", "tibia_cartilage"]
+    marching_cubes_index = anatomical_part_options.index(anatomical_part) + 1
+    for filename in os.listdir(data_dir):
+        if filename.endswith(".mhd") and count < 2:
+            count += 1
+            surface = create_surface(data_dir, filename, visualise, downsampling_ratio, marching_cubes_index)
+            save_pointcloud(surface, anatomical_part, filename, pointcloud_dir)
 
 
 if __name__ == "__main__":
