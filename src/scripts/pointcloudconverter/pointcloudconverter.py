@@ -132,8 +132,9 @@ def save_pointcloud(surface, anatomical_part: str, filename: str, pointcloud_dir
     file_id: str = filename[0:7]
 
     pointcloud = surface.get_surface().points()
-    complete_filename = os.path.join(pointcloud_dir, anatomical_part + "_cloud_" + file_id)
-    pointcloud.tofile(complete_filename)
+    complete_filename = os.path.join(pointcloud_dir, anatomical_part + "_cloud_" + file_id + ".ply")
+    # pointcloud.tofile(complete_filename)
+    io.write(Points(pointcloud), complete_filename)
 
 
 def main(argv):
@@ -158,7 +159,7 @@ def main(argv):
     anatomical_part_options = ["femur_bone", "femur_cartilage", "tibia_bone", "tibia_cartilage"]
     marching_cubes_index = anatomical_part_options.index(anatomical_part) + 1
     for filename in os.listdir(data_dir):
-        if filename.endswith(".mhd") and count < 6:
+        if filename.endswith(".mhd"):
             count += 1
             surface = create_surface(data_dir, filename, visualise, downsampling_ratio, marching_cubes_index)
             save_pointcloud(surface, anatomical_part, filename, pointcloud_dir)
