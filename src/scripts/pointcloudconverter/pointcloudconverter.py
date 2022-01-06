@@ -133,7 +133,6 @@ def save_pointcloud(surface, anatomical_part: str, filename: str, pointcloud_dir
 
     pointcloud = surface.get_surface().points()
     complete_filename = os.path.join(pointcloud_dir, anatomical_part + "_cloud_" + file_id + ".ply")
-    # pointcloud.tofile(complete_filename)
     io.write(Points(pointcloud), complete_filename)
 
 
